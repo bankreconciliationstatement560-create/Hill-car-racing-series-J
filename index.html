@@ -1,3 +1,187 @@
 <!DOCTYPE html>
 <html lang="en">
-<head
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚗 3D Hill Climb Racing - Kids Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: linear-gradient(skyblue, orange); font-family: Arial; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; font-size: 24px; z-index: 100; }
+        #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; z-index: 100; }
+        .ctrl-btn { width: 80px; height: 80px; border-radius: 50%; border: none; font-size: 30px; background: rgba(255,255,255,0.3); color: white; font-weight: bold; }
+        #accel { background: linear-gradient(green, lime); }
+        #brake { background: linear-gradient(red, orange); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="ui">
+        <div>Distance: <span id="distance">0</span>m</div>
+        <div>Speed: <span id="speed">0</span> km/h</div>
+    </div>
+    <div id="controls">
+        <button class="ctrl-btn" id="accel">🚀</button>
+        <button class="ctrl-btn" id="brake">🛑</button>
+    </div>
+
+    <script>
+        // GAME STATE
+        let scene, camera, renderer, car, wheels = [], track, distance = 0;
+        let speed = 0, angle = 0, isAccelerating = false, isBraking = false;
+        let keys = {};
+
+        // INIT
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x87CEEB, 100, 1000);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 20, 30);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Lights
+            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambient);
+            const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            sun.position.set(50, 100, 50);
+            sun.castShadow = true;
+            scene.add(sun);
+
+            createCar();
+            createTrack();
+            createGround();
+
+            // Events
+            window.addEventListener('resize', onResize);
+            window.addEventListener('keydown', (e) => keys[e.code] = true);
+            window.addEventListener('keyup', (e) => keys[e.code] = false);
+
+            // Mobile controls
+            document.getElementById('accel').addEventListener('touchstart', () => isAccelerating = true);
+            document.getElementById('accel').addEventListener('touchend', () => isAccelerating = false);
+            document.getElementById('brake').addEventListener('touchstart', () => isBraking = true);
+            document.getElementById('brake').addEventListener('touchend', () => isBraking = false);
+
+            animate();
+        }
+
+        function createCar() {
+            const carGroup = new THREE.Group();
+
+            // Car body
+            const bodyGeo = new THREE.BoxGeometry(4, 1.5, 8);
+            const bodyMat = new THREE.MeshLambertMaterial({ color: 0xff4444 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 1.5;
+            body.castShadow = true;
+            carGroup.add(body);
+
+            // Wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.8, 0.8, 1, 16);
+            const wheelMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            for(let i = 0; i < 2; i++) {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(i ? 2 : -2, 0.5, 3.5);
+                wheel.castShadow = true;
+                carGroup.add(wheel);
+                wheels.push(wheel);
+            }
+
+            car = carGroup;
+            car.position.set(0, 5, 0);
+            scene.add(car);
+        }
+
+        function createTrack() {
+            const trackGroup = new THREE.Group();
+            const roadMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+
+            // Generate wavy hill track
+            for(let i = 0; i < 200; i++) {
+                const height = Math.sin(i * 0.02) * 8 + Math.cos(i * 0.01) * 4;
+                const segment = new THREE.Mesh(
+                    new THREE.BoxGeometry(20, 4, 40),
+                    roadMat
+                );
+                segment.position.set(i * 20 - 2000, height, 0);
+                segment.receiveShadow = true;
+                trackGroup.add(segment);
+            }
+
+            scene.add(trackGroup);
+        }
+
+        function createGround() {
+            const groundGeo = new THREE.PlaneGeometry(10000, 10000);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+        }
+
+        function update() {
+            // Controls
+            if(keys['KeyA'] || keys['ArrowLeft'] || isAccelerating) {
+                speed = Math.min(speed + 0.2, 8);
+                angle = Math.max(angle - 0.02, -0.3);
+            }
+            if(keys['KeyD'] || keys['ArrowRight'] || isBraking) {
+                speed = Math.max(speed - 0.3, -2);
+                angle = Math.min(angle + 0.02, 0.3);
+            }
+
+            // Friction & gravity
+            speed *= 0.98;
+            car.position.x += Math.sin(angle) * speed;
+            car.position.z += Math.cos(angle) * speed;
+            car.position.y += Math.sin(car.position.z * 0.01) * 2;
+
+            // Rotation
+            car.rotation.z = angle * 0.5;
+            wheels.forEach(w => w.rotation.x += speed * 0.5);
+
+            // Camera follow
+            camera.position.x = car.position.x - 15 * Math.sin(angle);
+            camera.position.y = car.position.y + 15;
+            camera.position.z = car.position.z + 25;
+            camera.lookAt(car.position);
+
+            // Distance
+            distance += speed;
+            document.getElementById('distance').textContent = Math.floor(distance);
+            document.getElementById('speed').textContent = Math.floor(Math.abs(speed * 10));
+
+            // Reset if fallen
+            if(car.position.y < -20) {
+                car.position.set(0, 5, 0);
+                speed = 0;
+                angle = 0;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            update();
+            renderer.render(scene, camera);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+    </script>
+</body>
+</html>
