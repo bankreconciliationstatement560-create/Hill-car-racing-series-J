@@ -390,11 +390,55 @@
     const sorted = [...cars].sort((a,b)=>b.x-a.x);
     const place = sorted.findIndex(c=>c===player)+1;
     placeEl.textContent = place;
+// coin + fuel pickups
+    const pickups = []; // {mesh, x, type:'coin'|'fuel', taken:false}
+    // ---- Fuel system ----
+const moving = Math.abs(player.v) > 0.15;
+if (moving) fuel -= (0.9 + level*0.15) * dt;
+fuel = clamp(fuel, 0, 100);
 
+// Game over if fuel ends
+if (fuel <= 0) {
+  player.v = 0;
+  player.x = 10;
+  fuel = 100;
+}
+
+// ---- Pickups check ----
+for (const p of pickups) {
+  if (p.taken) continue;
+
+  if (p.type === 'coin') p.mesh.rotation.y += 3.2 * dt;
+
+  const dx = Math.abs(player.x - p.x);
+  if (dx < 2.2) {
+    p.taken = true;
+    scene.remove(p.mesh);
+
+    if (p.type === 'coin') coins += 1;
+    if (p.type === 'fuel') fuel = clamp(fuel + 35, 0, 100);
+  }
+}
+
+// ---- Finish line ----
+const finishX = 1200 + (level-1)*600;
+if (player.x >= finishX) {
+  level += 1;
+  player.x = 10;
+  player.v = 0;
+  fuel = 100;
+  spawnPickups();
+}
     // HUD
     distEl.textContent = Math.floor(player.x);
     spdEl.textContent  = Math.floor(Math.abs(player.v*12)); // fake km/h
-
+    const fuelEl  = document.getElementById('fuel');
+    const coinsEl = document.getElementById('coins');
+    fuelEl.textContent = Math.floor(fuel);
+    coinsEl.textContent = coins;
+    let fuel = 100;
+    let coins = 0;
+    let level = 1;
     updateCamera();
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
@@ -406,10 +450,37 @@
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
+function spawnPickups() {
+  // clear old
+  for (const p of pickups) scene.remove(p.mesh);
+  pickups.length = 0;
 
-  // Start camera position
+  for (let x = 80; x < ROAD_LEN - 60; x += 120) {
+    // COIN
+    const coin = new THREE.Mesh(
+      new THREE.TorusGeometry(0.45, 0.18, 10, 18),
+      new THREE.MeshStandardMaterial({ color: 0xffd000, roughness: 0.35, metalness: 0.6 })
+    );
+    coin.castShadow = true;
+    coin.position.set(x, roadY(x) + 2.2, (Math.random() > 0.5 ? 1 : -1) * 1.2);
+    scene.add(coin);
+    pickups.push({ mesh: coin, x, type: 'coin', taken: false });
+
+    // FUEL (every 5th)
+    if ((x/120) % 5 === 0) {
+      const fuelCan = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 1.1, 0.6),
+        new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.6 })
+      );
+      fuelCan.castShadow = true;
+      fuelCan.position.set(x + 20, roadY(x + 20) + 2.0, 0);
+      scene.add(fuelCan);
+      pickups.push({ mesh: fuelCan, x: x + 20, type: 'fuel', taken: false });
+    }
+  }
+requestAnimationFrameosition
   camera.position.set(-10, 12, 26);
-  requestAnimationFrame(tick);
+  spawnPickups();  requestAnimationFrame(tick);
 })();
 </script>
 </body>
